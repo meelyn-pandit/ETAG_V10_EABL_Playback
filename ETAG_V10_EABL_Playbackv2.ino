@@ -938,13 +938,19 @@ void loop() { // Main code is here, it loops forever:
   if(curTimeHHMM >= 530 & curTimeHHMM < 1130 & speakerOn ==0){ //incorporate birdPresent state variable, use it as a countdown, 0 does not need to be in front of beginTime
     //change state of speaker
     speakerOn = 1;
+    pastSpeakerOn = 0;
   }
 
-   if(curTimeHHMM < 530 & curTimeHHMM >=1130 & speakerOn ==1){
+   if(curTimeHHMM < 530 & speakerOn ==1){
     speakerOn = 0;
     pastSpeakerOn = 1;
   }
 
+   if(curTimeHHMM >=1130 & speakerOn ==1){
+    speakerOn = 0;
+    pastSpeakerOn = 1;
+  }
+  
    if(speakerOn ==1 & pastSpeakerOn ==0){
       //turn on speaker
         MP3on();
@@ -1057,7 +1063,7 @@ void loop() { // Main code is here, it loops forever:
         
 //          playWithVolume(0X0F01);//play the first song with volume 15(0x0F) class
 //            MP3on();
-            myDFPlayer.play(1);
+            myDFPlayer.loop(1);
       } else {
         processTag(RFIDtagArray, RFIDstring, RFIDtagUser, &RFIDtagNumber);   // Tag read (probably same as before) - process to parse data
         tagNo = RFIDtagNumber;                                               // Reset current tag ID
