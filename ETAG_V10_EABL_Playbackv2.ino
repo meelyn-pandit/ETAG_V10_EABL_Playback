@@ -196,6 +196,8 @@ unsigned long RFIDtagNumber = 0;      // Stores bytes 1 through 4 of a tag ID (u
 byte RFIDtagArray[5];                 // Stores the five individual bytes of a tag ID.
 
 
+
+
 // ********************CONSTANTS (SET UP LOGGING PARAMETERS HERE!!)*******************************
 const byte checkTime = 30;                          // How long in milliseconds to check to see if a tag is present (Tag is only partially read during this time -- This is just a quick way of detirmining if a tag is present or not
 const unsigned int pollTime1 = 100;                 // How long in milliseconds to try to read a tag if a tag was initially detected (applies to both RF circuits, but that can be changed)
@@ -216,6 +218,12 @@ const byte motorPresent = 0; //originally set to 1
 
 int speakerOn = 0;
 int pastSpeakerOn = 0;
+int birdBox = 0;
+int birdBox2 = 0;
+unsigned long speakerTime = 0;
+unsigned long speakerPause = 10000;
+//int curTimeHHMM;
+
 
 /* The reader will output Serial data for a certain number of read cycles;
    then it will start using a low power sleep mode during the pauseTime between read attempts.
@@ -225,7 +233,7 @@ int pastSpeakerOn = 0;
    serial data, but tag reading and data storage will still work.
 */
 unsigned int cycleCount = 0;          // counts read cycles
-unsigned int stopCycleCount = 50000;     // How many read cycles to maintain serial comminications
+unsigned int stopCycleCount = 500;     // How many read cycles to maintain serial comminications
 bool Debug = 1;                       // Use to stop serial messages once sleep mode is used.
 byte SDOK = 1;
 char logMode;
@@ -683,14 +691,6 @@ void setup() {  // setup code goes here, it is run once before anything else
   pastTime = 0;
   calFreq = timeCalFreq;
 
-// MP3on();
-//  delay(600);//Wait chip initialization is complete
-//  serial.println("Mp3 ON!!!");
-//  myMP3.begin(9600);
-//  //delay(500);//Wait chip initialization is complete
-//    sendCommand(CMD_SEL_DEV, DEV_TF);//select the TF card  
-//  delay(200);//wait for 200ms
-//  playWithVolume(0X0F01);//play the first song with volume 15(0x0F) class
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -699,6 +699,20 @@ void setup() {  // setup code goes here, it is run once before anything else
 
 void loop() { // Main code is here, it loops forever:
 
+  serial.print("speaker time = ");
+  serial.println(speakerTime);
+  serial.print("millis is ");
+  serial.println(millis());
+      if(speakerTime == 0){
+        speakerOnFunc();
+        speakerTime = 0xFFFFFFFF; //set the speaker time to the highest long variable
+      }
+      if(speakerTime <= millis()){
+        speakerOnFunc();
+        speakerTime = 0xFFFFFFFF;
+
+    }
+    
   //Variables used in main loop
   String SDsaveString;  //used later for SD card writing.
   String currentDate;   //usde for current date in mm/dd/yyyy format
@@ -713,190 +727,6 @@ void loop() { // Main code is here, it loops forever:
   }
   updateTimeVars();             // Gets the time unit variables from the RTC (ss, mm, hh, etc),
   curTime = makeUnixTime(yr, mo, da, hh, mm, ss);     // returns a unix time value based on the RTC values
-  //  if(Debug) {
-  //    serial.println(showTime());   // print the rtc values
-  //    serial.println(F("curTime   pastTime"));
-  //    serial.print(curTime);
-  //    serial.print("   ")  ;
-  //    serial.println(pastTime);
-  //  }
-//
-//
-//
-//
-//
-//
-//  serial.print("curTime ");
-//  serial.print(curTime);
-//    serial.print("    nextTime ");
-//  serial.print(nextTime);
-//      serial.print("    tagGrpSel ");
-//  serial.println(tagGrpSel, BIN);
-//
-//
-
-//Update Tag list
-
-
-  if (curTime >= nextTime) {
-    readTimes(curTime, 1);  //Switch tag lists.
-    printBits(tagGrpSel, 16, 0);
-    serial.println();
-    currentDate = rtc.stringDateUSA(); //Get the current date in mm/dd/yyyy format (we're weird in the US)
-    currentTime = rtc.stringTime(); //Get the time
-    SDsaveString = String("List selection updated to ") + 
-      selBits + " at " + currentDate + " " + currentTime;    // Create a data string
-    if (SDOK == 1) {
-      if (Debug) {serial.println(SDsaveString);}
-      SDwriteString(SDsaveString, logFile); //Write log to SD card
-    }
-    if (Debug) {
-      serial.print("Next switch at ");
-      extractUnixTime(nextTime);
-      char dateLine2[20];
-      sprintf(dateLine2, "%02d/%02d/%02d %02d:%02d:%02d",
-              mo, da, yr, hh, mm, ss);
-      serial.print(dateLine2);
-      serial.print(" to ");
-      printBits(nextGrpSel, 16, 1);
-      serial.println();
-    }
-  }
-
-  if ((curTime - pastTime) / 60 >= calFreq & GPSstatus == 0 & calFreq != 999) { //calculate difference in minutes between current time and past time to see if it is time to check the GPS for a time update
-    //Try to aquire a GPS clock update
-    //if(Debug) { serial.println(F("Time to check GPS"));}  //print a message
-    GPSacquireA = curTime;                  //note the current time
-    //if(Debug) {
-    //serial.print(F("GPS timing started: ")); //indicate when aquisition started
-    //serial.println(GPSacquireA, DEC);}
-    GPSstatus = 1;                        //Set GPS status to 1 to indicate that aquisition is in progress
-    timeVal = 0;
-    dateVal = 0;
-    dateVal_clk = 10000 * da + 100 * mo + yr;
-    GPSon();                              //Power up the gps module
-    //    while (Serial2.available() > 0){
-    //       byte Byte0 = Serial2.read();}       // attempt to clear the Serial2 buffer
-  }
-
-  if (GPSstatus > 0) {   //Do this whenever GPS status is 1 or 2
-    if (Debug) {
-      uint32_t timeOn  = curTime - GPSacquireA;
-      serial.print("GPS aquisition active for ");   //Serial message
-      serial.print(timeOn, DEC);
-      serial.println(" secs");
-    }
-    parseGPS(millis() + pauseTime);
-    //      if(Debug) {
-    //        serial.println(F("timeVal and dateVal"));
-    //        serial.print(timeVal);
-    //        serial.print(F(" "));
-    //        serial.println(dateVal);
-    //        serial.print(timeVal_old);
-    //        serial.print(F(" "));
-    //        serial.println(dateVal_old);
-    //      }
-    if (timeVal - timeVal_old > 0 & timeVal - timeVal_old < 50 & dateVal == dateVal_old & dateVal != 0) {
-      GPSstatus = GPSstatus + 1;
-    } else {
-      if (timeVal != 0) {
-        GPSstatus = 1;
-      }
-    }
-    if (timeVal != 0) {
-      timeVal_old = timeVal;
-      dateVal_old = dateVal;
-    }
-
-    if ((curTime - GPSacquireA) >= 120) {            //Check to see if aquisition process has timed out.
-      if (Debug) {
-        serial.print(F("FAILED TO AQUIRE!!!!!!!!!")); //Failure message
-      }
-      GPSoff();                                     //Turn off the GPS
-      GPSstatus = 0;                                //GPSstatus = 0 indicates no GPS activity
-      calFreqInc = calFreqInc + 5;
-      calFreq = min(calFreqInc, timeCalFreq);           //shorten calFreq to 5 minutes if there is a GPS failure
-      GPSoff();                                     //Make sure GPS is off
-      //         while (Serial2.available() > 0){
-      //            char Byte0 = Serial2.read(); }             //read to dummy byte to clear buffer
-      //         Serial2.end();                                //Stop Serial2 communication
-      //if(SDOK==1) {saveLogSD("GPS acquisition failed ");}
-      currentDate = rtc.stringDateUSA(); //Get the current date in mm/dd/yyyy format (we're weird in the US)
-      currentTime = rtc.stringTime(); //Get the time
-      SDsaveString = String("GPS acquisition failed ")  + currentDate + " " + currentTime;    // Create a data string
-      if (SDOK == 1) {
-        SDwriteString(SDsaveString, logFile); //Write log to SD card
-      }
-      char flashData[13] = {0, 0xFA, 0xFA, 0xFA, 0xFA, 0xFA,              // Create an array representing an entire line of data
-                            rtc.getMonth(), rtc.getDate(), rtc.getYear(), rtc.getHours(),
-                            rtc.getMinutes(), rtc.getSeconds()
-                           };
-      writeFlashArray(fMemPageAddr, fMemByteAddr, flashData, 12);  //write array
-      advanceFlashAddr2(12);
-    }
-  }
-
-  if (GPSstatus >= 3) {
-    String timeLogStr = "";
-    GPSoff();
-    GPSstatus = 0;
-    calFreqInc = 0;
-    calFreq = timeCalFreq;
-    //      while (Serial2.available() > 0){
-    //          char Byte0 = Serial2.read(); }    //read to dummy byte to clear buffer
-    //      Serial2.end();
-    if (Debug) {
-      serial.println(F("GPS read obtained!!"));
-      serial.println();
-    }
-    if (rtc.updateTime() == false) {
-      if (Debug) {
-        serial.print(F("RTC failed")); //Updates the time variables from RTC
-      }
-    }
-    currentDate = rtc.stringDateUSA(); //Get the current date in mm/dd/yyyy format (we're weird in the US)
-    currentTime = rtc.stringTime(); //Get the time
-    currentDateTime = currentDate + " " + currentTime ;
-    GPSoff();                             //Turn GPS off in case it is on
-    GPSstatus = 0;                        //End GPS read attempt
-    pastTime = 0;                         //This should ensure a GPS read on wake up
-
-    //dateVal = 10000*da + 100*mo + yr ;               //Use date from RTC  - THIS DOES NOT WORK - time zone issue
-    printGPStime(timeVal, dateVal);                 //Create a string for GPS time and set time byte variables (ss, mm, hh, da, mo, yr).
-    extractUnixTime(makeUnixTime(yr, mo, da, hh, mm, ss) + timeOffset * 3600);
-    //if (dateVal_clk == 10000*da + 100*mo + yr) {
-    if (rtc.setTime(ss, mm, hh, da, mo, yr + 2000, 1) == false) {       //  attempt to set clock with input values
-      if (Debug) {
-        serial.println(F("Something went wrong setting the time"));
-      }
-    }
-    if (Debug) {
-      serial.print(F("Local time: "));
-      serial.println(showTime());
-      serial.println(F("Clock calibrated with GPS time."));
-    }
-    timeLogStr = "GPS calibration: Time updated from " + currentDateTime + " to ";
-    //      } else {
-    //          timeLogStr = "Bad date recieved from GPS. Time not updated.";
-    //      }
-    curTime = makeUnixTime(yr, mo, da, hh, mm, ss);                  // returns a unix time value based on the RTC values
-    //if(SDOK==1) {saveLogSD(timeLogStr);}
-    currentDate = rtc.stringDateUSA();                               // Get the current date in mm/dd/yyyy format (we're weird in the US)
-    currentTime = rtc.stringTime(); //Get the time
-    SDsaveString = timeLogStr  + currentDate + " " + currentTime;    // Create a data string
-    if (SDOK == 1) {
-      SDwriteString(SDsaveString, logFile); // Write log to SD card
-    }
-    pastTime = curTime;
-    char flashData[13] = {0, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,           // Create an array representing an entire line of data
-                          rtc.getMonth(), rtc.getDate(), rtc.getYear(),
-                          rtc.getHours(), rtc.getMinutes(), rtc.getSeconds()
-                         };
-    writeFlashArray(fMemPageAddr, fMemByteAddr, flashData, 12);      // write array to note GPS update
-    advanceFlashAddr2(12);
-  }
-
-
 
   ///////Check Sleep//////////////Check Sleep///////////
   //Check to see if it is time to execute nightime sleep mode. Use this code to change the speaker mode and 
@@ -904,6 +734,7 @@ void loop() { // Main code is here, it loops forever:
   rtc.updateTime();                                            // Get an update from the real time clock
   if (Debug) serial.println(showTime());                       // Show the current time
   int curTimeHHMM = rtc.getHours() * 100 + rtc.getMinutes();   // Combine hours and minutes into one variable
+//  curTimeHHMM = rtc.getHours() * 100 + rtc.getMinutes();
   if (curTimeHHMM == slpTime) {                                // Check to see if it is sleep time
     String SlpStr =  "Entering sleep mode at " + showTime();  // if it's time to sleep make a log message
     GPSoff();                                                 // Turn GPS off in case it is on
@@ -922,6 +753,7 @@ void loop() { // Main code is here, it loops forever:
     sleepAlarm();                                                  // sleep using clock alarm for wakeup
     rtc.updateTime();                                              // get time from clock
     SlpStr =  "Wake up from sleep mode at " + showTime();          // log message
+    speakerTime = 0;
     if (SDOK == 1) {
       SDwriteString(SlpStr, logFile); // save log message if SD writes are enabled
     }
@@ -932,51 +764,30 @@ void loop() { // Main code is here, it loops forever:
     writeFlashArray(fMemPageAddr, fMemByteAddr, flashData2, 12);   // write array to note wake-up from sleep
     advanceFlashAddr2(12);
   }
-
-  //////////////// Setting up Speaker Time Frame and Conditions//////////////////
-
-  if(curTimeHHMM >= 530 & curTimeHHMM < 1130 & speakerOn ==0){ //incorporate birdPresent state variable, use it as a countdown, 0 does not need to be in front of beginTime
-    //change state of speaker
-    speakerOn = 1;
-    pastSpeakerOn = 0;
-  }
-
-   if(curTimeHHMM < 530 & speakerOn ==1){
-    speakerOn = 0;
-    pastSpeakerOn = 1;
-  }
-
-   if(curTimeHHMM >=1130 & speakerOn ==1){
-    speakerOn = 0;
-    pastSpeakerOn = 1;
-  }
+//    //////////////// Setting up Speaker Time Frame and Conditions//////////////////
+//
+//  if(curTimeHHMM >= 530 & curTimeHHMM < 1130 & speakerOn ==0){ //incorporate birdPresent state variable, use it as a countdown, 0 does not need to be in front of beginTime
+//    //change state of speaker
+//    speakerOn = 1;
+//    pastSpeakerOn = 0;
+//  }
+//
+//   if(curTimeHHMM < 530 & speakerOn ==1){
+//    speakerOn = 0;
+//    pastSpeakerOn = 1;
+//  }
+//
+//   if(curTimeHHMM >=1130 & speakerOn ==1){
+//    speakerOn = 0;
+//    pastSpeakerOn = 1;
+//  }
+//
+//  if(speakerOn == 0 & pastSpeakerOn == 1){
+//    MP3off();
+//    speakerOn = 0;
+//    pastSpeakerOn = 0;
+//  }
   
-   if(speakerOn ==1 & pastSpeakerOn ==0){
-      //turn on speaker
-        MP3on();
-          delay(600);//Wait chip initialization is complete
-          serial.println("Mp3 ON!!!");
-          myMP3.begin(9600);
-          delay(1000);//Wait chip initialization is complete
-//            sendCommand(CMD_SEL_DEV, DEV_TF);//select the TF card  
-          myDFPlayer.volume(10);  //Set volume value (0~30). Volume of 10 gives 65 dB in the nest box.
-          myDFPlayer.loop(1);
-          delay(200);//wait for 200ms
-//          playWithVolume(0X0F01);//play the first song with volume 15(0x0F) class
- 
-    //log a message that says speaker turned on
-      
-    speakerOn = 1;
-    pastSpeakerOn = 1;
-  }
-
-  if(speakerOn == 0 & pastSpeakerOn == 1){
-    MP3off();
-//    myDFPlayer.pause();
-    speakerOn = 0;
-    pastSpeakerOn = 0;
-  }
- 
   //////Read Tags//////////////Read Tags//////////
 
   //Try to read tags - if a tag is read and it is not a recent repeat, write the data to the SD card and the backup memory.
@@ -984,11 +795,20 @@ void loop() { // Main code is here, it loops forever:
   if (FastRead(RFcircuit, checkTime, pollTime1) == 1) {
     processTag(RFIDtagArray, RFIDstring, RFIDtagUser, &RFIDtagNumber);    // Parse tag data into string and hexidecimal formats
     rtc.updateTime();                                                     // Update time from clock
-
-    //mp3Basic(CMD_PAUSE);
-    myDFPlayer.pause();  //pause the mp3
-    delay(1000);
     
+//  if(speakerOn ==1 & pastSpeakerOn ==0){ //turn on speaker
+      myDFPlayer.pause();  //pause the mp3, needs to be here to instantly pause the mp3 player
+//    MP3off();
+    speakerTime = millis() + speakerPause; //millis is time in milliseconds + the 10,000 ms duration of silence (or whatever you change it to)
+    serial.println("speaker time set");
+
+    //log a message that says speaker turned on
+//    speakerOn = 1;
+//    pastSpeakerOn = 1;
+//  } else {
+//    
+//  }
+
     if (feedMode == 'A' & doorState == 1) {           // Do the following in feed-All mode
       if (motorPresent) {
         doorOpen();                                   // Just open the door if the motor is active
@@ -1054,16 +874,16 @@ void loop() { // Main code is here, it loops forever:
     }
 
     uint32_t tagNo2 = tagNo;                       // make a copy of current RFID number and antenna no.
-
+    
     //Wait for tag to leave
     while (tagNo2 == tagNo) {                      // Continually check to see if tag number changes (or if a tag is not read)
       if (FastRead(RFcircuit, 100, 200) == 0) {    // Use slightly longer check and poll times used here...
         tagNo2 = 0xFFFFFFFF;                       // clear tagNo if no tag is read - this will exit the while loop when no tag is read
-        if (Debug) serial.println(F("tag gone ")); // Output message
-        
-//          playWithVolume(0X0F01);//play the first song with volume 15(0x0F) class
-//            MP3on();
-            myDFPlayer.loop(1);
+                
+      if (Debug) serial.println(F("tag gone ")); // Output message
+      
+      speakerTime = millis() + speakerPause;
+      
       } else {
         processTag(RFIDtagArray, RFIDstring, RFIDtagUser, &RFIDtagNumber);   // Tag read (probably same as before) - process to parse data
         tagNo = RFIDtagNumber;                                               // Reset current tag ID
@@ -1072,9 +892,10 @@ void loop() { // Main code is here, it loops forever:
           serial.println(tagNo, HEX);                //Output message
         }
       }
+                
       delay(100);
     }
-
+            
     if (feedMode != 'O') {     // close the door if it needs closing
       if (motorPresent) {
         doorClose();           // doorClose function checks to make sure door is open first.
@@ -1085,27 +906,30 @@ void loop() { // Main code is here, it loops forever:
 
   }
 
+//                 unsigned long currentMillis = millis();
+//                if (currentMillis - previousMillis > 10000) {
+//                  previousMillis = currentMillis;
+//                  myDFPlayer.loop(1);  //Play next mp3 after 10 seconds.
+//                  birdBox = 0;
+//                  serial.println("MP3 playing again");
+//                } 
+    
   //////////Pause//////////////////Pause//////////
   //After each read attempt execute a pause using either a simple delay or low power sleep mode.
 
-  if (cycleCount < stopCycleCount | GPSstatus != 0) {   //Just to a simple pause between read attempts uneil cycle count reaches its threshold. Also do a simple pause if the GPS is engaged
-    cycleCount++;
-    //blipLED(30);
-    if (GPSstatus == 0) {
-      delay(pauseTime); //pause between polling attempts if GPS is not active (When GPS is active the pause happens in that code).
-    }
-  } else {
-    sleepTimer(pauseCountDown, pauseRemainder);
-  }
+//  if (cycleCount < stopCycleCount | GPSstatus != 0) {   //Just to a simple pause between read attempts uneil cycle count reaches its threshold. Also do a simple pause if the GPS is engaged
+//    cycleCount++;
 
+      delay(pauseTime); //pause between polling attempts if GPS is not active (When GPS is active the pause happens in that code).
+ 
+//  } else {
+//    sleepTimer(pauseCountDown, pauseRemainder);
+//  }
+    
   //Alternate between circuits (comment out to stay on one cicuit).
   RFcircuit == 1 ? RFcircuit = 2 : RFcircuit = 1; //if-else statement to alternate between RFID circuits
 
 }
-
-
-
-
 
 /////////////////////////////////////////////////////////////////////////////
 /////FUNCTIONS/////////FUNCTIONS/////////FUNCTIONS/////////FUNCTIONS/////////
@@ -2552,4 +2376,22 @@ void sendBytes(uint8_t nbytes)
   {
     myMP3.write(Send_buf[i]) ;
   }
+}
+
+void speakerOnFunc(){
+
+//    while(myDFPlayer.readState() != 0b11111111111111111111111111111111){
+      MP3on();
+      delay(600);//Wait chip initialization is complete
+      serial.println("Mp3 ON!!!");
+      myMP3.begin(9600);
+        delay(300);//Wait chip initialization is complete
+        serial.print("mp3 status is "); 
+        serial.println(myDFPlayer.readState(), BIN);
+      myDFPlayer.volume(10);  //Set volume value (0~30). Volume of 10 gives 65 dB in the nest box.
+      myDFPlayer.loop(1);
+        delay(20);//wait for 200ms 
+        serial.print("mp3 status is "); 
+        serial.println(myDFPlayer.readState(), BIN);
+//    }
 }
