@@ -233,7 +233,7 @@ unsigned long speakerPause = 10000;
    serial data, but tag reading and data storage will still work.
 */
 unsigned int cycleCount = 0;          // counts read cycles
-unsigned int stopCycleCount = 500;     // How many read cycles to maintain serial comminications
+unsigned int stopCycleCount = 5000;     // How many read cycles to maintain serial comminications
 bool Debug = 1;                       // Use to stop serial messages once sleep mode is used.
 byte SDOK = 1;
 char logMode;
@@ -2269,6 +2269,7 @@ void MP3on() {
   digitalWrite(MP3Pwr1, HIGH);
 
   myDFPlayer.begin(myMP3);
+      delay(600);//Wait chip initialization is complete
   myDFPlayer.enableLoop();
 
 }
@@ -2382,7 +2383,6 @@ void speakerOnFunc(){
 
 //    while(myDFPlayer.readState() != 0b11111111111111111111111111111111){
       MP3on();
-      delay(600);//Wait chip initialization is complete
       serial.println("Mp3 ON!!!");
       myMP3.begin(9600);
         delay(300);//Wait chip initialization is complete
